@@ -34,6 +34,7 @@ void read_from_client(int SocketFD){
             mutx.lock();
             queue_messages.push(msg);
             mutx.unlock();
+            if(buffer_op[0]=='E') return;
         }
         bzero(buffer,4);
         n = read(SocketFD,buffer,4);

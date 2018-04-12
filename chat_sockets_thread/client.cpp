@@ -9,9 +9,16 @@
 #include <iostream>
 #include <thread>
 
+
 #include "protocol.h"
 
 using namespace std;
+
+void print_vector(vector<char> vec){
+    for(int i=0; i<vec.size(); i++)
+        cout << vec[i];
+    cout << endl;
+}
 
 
 void read_from_client(int SocketFD){
@@ -19,20 +26,32 @@ void read_from_client(int SocketFD){
     //we use 256 to allocate all type of messages
     //this function shows all the coded message
     char *message_buffer;
-    char buffer[256];
-    bzero(buffer,256);
-    int n = read(SocketFD,buffer,256);
+    char buffer[4];
+    bzero(buffer,4);
+    int n = read(SocketFD,buffer,4);
     do{
         if (n>0){
-//            int size_message = atoi(buffer);
-//            n = read(SocketFD, message_buffer, size_message);
-//            cout << "Size Message: " << size_message << endl;
-            cout << "Server Message Received:  " << buffer << endl;
+            int size_message = atoi(buffer);
+            char buffer_op[1];
+            //now read operation
+            n = read(SocketFD, buffer_op, 1);
+            if(buffer_op[0] == 'R'){
+                message_buffer = new char[size_message];
+                n = read(SocketFD, message_buffer, size_message);
+                cout << "Server Message Received:  " << message_buffer << endl;
+            }
+            else if(buffer_op[0] == 'D'){
+                file_utils::process_received_file(SocketFD, size_message);
+            }
         }
-        bzero(buffer,256);
-        n = read(SocketFD,buffer,256);
+        bzero(buffer,4);
+        n = read(SocketFD,buffer,4);
     }while(true);
 }
+
+
+
+
 
 int main(int argc, char *argv[])
 {
@@ -51,7 +70,7 @@ int main(int argc, char *argv[])
 
     stSockAddr.sin_family = AF_INET;
     stSockAddr.sin_port = htons(1100);
-    Res = inet_pton(AF_INET, "127.0.0.1", &stSockAddr.sin_addr);
+    Res = inet_pton(AF_INET, "172.20.10.4", &stSockAddr.sin_addr);
 
     if (0 > Res)
     {
@@ -74,10 +93,16 @@ int main(int argc, char *argv[])
     }
     std::thread(read_from_client, SocketFD).detach();
     cout << "Connecting..." << endl;
+
     string input_message;
     string to_send;
     //Please never use cin alone, use cin with get line
     while(true){
+        cout<<"Ingrese una de las opciones"<<endl;
+        cout<<"P : Print list of users"<<endl;
+        cout<<"L : Login chat"<<endl;
+        cout<<"C : Send message "<<endl;
+        cout<<"R : Send "<<endl;
         std::getline(std::cin, input_message);
         //We have 3 cases to send
         //Sending P we will receive the users list
@@ -101,6 +126,28 @@ int main(int argc, char *argv[])
             cout << "Enter the message: ";
             std::getline(std::cin, to_send);
             to_send = encode_to_user_message(to_send, to_user);
+        }
+        else if(input_message == "F"){
+            string to_user;
+            string filename;
+            string binary_file;
+            int size_file;
+            to_send = "";
+            cout << "Enter the username to send: ";
+            std::getline(std::cin, to_user);
+            cout << "Enter the filename: ";
+            std::getline(std::cin, filename);
+            file_utils::get_size_string_of_file(filename, binary_file, size_file);
+            to_send = file_utils::prepare_file_message(binary_file, size_file, filename, to_user);
+            std::vector<char> v_data(to_send.begin(), to_send.end());
+            //cout << filename << endl;
+            n = write(SocketFD, &v_data[0], v_data.size());
+            input_message = "";
+            continue;
+        }
+        else if(input_message == "E"){
+            to_send = "";
+            to_send = encode_simple_message(string("E"));
         }
         else{
             cout << "Command not recognized :(" << endl;
